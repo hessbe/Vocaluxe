@@ -121,7 +121,6 @@ namespace Vocaluxe.Lib.Draw
             control.MouseEnter += new EventHandler(this.OnMouseEnter);            
 
             this.ClientSize = new Size(CConfig.ScreenW, CConfig.ScreenH);
-            //this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.Opaque, true);
             this.CenterToScreen();
         }
 
@@ -285,8 +284,15 @@ namespace Vocaluxe.Lib.Draw
 
             this.DesktopBounds = new Rectangle(Screen.AllScreens[ScreenNr].Bounds.Location,
                 new Size(Screen.AllScreens[ScreenNr].Bounds.Width, Screen.AllScreens[ScreenNr].Bounds.Height));
-            this.TopMost = true;
-            this.Show();
+
+            if (this.WindowState == FormWindowState.Maximized)
+            {
+                this.WindowState = FormWindowState.Normal;
+                RResize();
+                this.WindowState = FormWindowState.Maximized;
+            }
+            else
+                RResize();
 
             CConfig.SaveConfig();
         }
@@ -298,8 +304,6 @@ namespace Vocaluxe.Lib.Draw
 
             this.FormBorderStyle = FormBorderStyle.Sizable;
             this.DesktopBounds = new Rectangle(_restore.location, new Size(_restore.width, _restore.height));
-
-            this.TopMost = false;
 
             CConfig.SaveConfig();
         }
@@ -332,6 +336,27 @@ namespace Vocaluxe.Lib.Draw
 
             control.ClientSize = this.ClientSize;
             RResize();
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            switch (m.Msg)
+            {
+                case 0x112: // WM_SYSCOMMAND
+                    switch ((int)m.WParam & 0xFFF0)
+                    {
+                        case 0xF100: // SC_KEYMENU
+                            m.Result = IntPtr.Zero;
+                            break;
+                        default:
+                            base.WndProc(ref m);
+                            break;
+                    }
+                    break;
+                default:
+                    base.WndProc(ref m);
+                    break;
+            }
         }
         #endregion form events
 
@@ -419,7 +444,7 @@ namespace Vocaluxe.Lib.Draw
 
 
         #region implementation
-
+        #region main stuff
         public bool Init()
         {
             this.Text = CSettings.GetFullVersionText();
@@ -469,7 +494,7 @@ namespace Vocaluxe.Lib.Draw
                     if (CTime.IsRunning())
                         delay = (int)Math.Floor(CConfig.CalcCycleTime() - CTime.GetMilliseconds());
 
-                    if (delay >= 1)
+                    if (delay >= 1 && CConfig.VSync == EOffOn.TR_CONFIG_OFF)
                         System.Threading.Thread.Sleep(delay);
 
                     CTime.CalculateFPS();
@@ -514,7 +539,8 @@ namespace Vocaluxe.Lib.Draw
             CFonts.Style = text.Style;
             return new RectangleF(text.X, text.Y, CFonts.GetTextWidth(CLanguage.Translate(text.Text)), CFonts.GetTextHeight(CLanguage.Translate(text.Text)));
         }
-        
+        #endregion main stuff
+
         #region Basic Draw Methods
         public void ClearScreen()
         {
@@ -638,6 +664,8 @@ namespace Vocaluxe.Lib.Draw
         #endregion Basic Draw Methods
 
         #region Textures
+
+        #region adding
         public STexture AddTexture(string TexturePath)
         {
             if (System.IO.File.Exists(TexturePath))
@@ -902,6 +930,8 @@ namespace Vocaluxe.Lib.Draw
             queque.data = Data;
             queque.height = H;
             queque.width = W;
+            texture.height = H;
+            texture.width = W;
 
             lock (MutexTexture)
 	        {
@@ -913,7 +943,9 @@ namespace Vocaluxe.Lib.Draw
             
             return texture;
         }
+        #endregion adding
 
+        #region updating
         public bool UpdateTexture(ref STexture Texture, IntPtr Data)
         {
             if (_TextureExists(ref Texture))
@@ -1021,6 +1053,7 @@ namespace Vocaluxe.Lib.Draw
             }
             return false;
         }
+        #endregion updating
 
         public void RemoveTexture(ref STexture Texture)
         {
@@ -1055,6 +1088,7 @@ namespace Vocaluxe.Lib.Draw
             return false;
         }
 
+        #region drawing
         public void DrawTexture(STexture Texture)
         {
             DrawTexture(Texture, Texture.rect, Texture.color);
@@ -1312,6 +1346,7 @@ namespace Vocaluxe.Lib.Draw
                 GL.BindTexture(TextureTarget.Texture2D, 0);
             }
         }
+        #endregion drawing
 
         public int TextureCount()
         {
@@ -1369,8 +1404,14 @@ namespace Vocaluxe.Lib.Draw
                 GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, q.width, q.height,
                     OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, q.data);
 
+                GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureParameterName.ClampToEdge);
+                GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureParameterName.ClampToEdge);
+
                 GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
                 GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+
+                GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
+                GL.Ext.GenerateMipmap(GenerateMipmapTarget.Texture2D);
 
                 GL.BindTexture(TextureTarget.Texture2D, 0);
 
@@ -1384,7 +1425,6 @@ namespace Vocaluxe.Lib.Draw
                 _Queque.RemoveAt(0);
             }
         }
-
         #endregion Textures
 
         #endregion implementation

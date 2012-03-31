@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-
 using Vocaluxe.Lib.Draw;
 using Vocaluxe.Lib.Song;
 using Vocaluxe.Menu;
@@ -305,6 +305,176 @@ namespace Vocaluxe.Base
             _Sort(sorting, CConfig.Tabs, String.Empty);
         }
 
+        private static List<SongPointer> _CreateSortList(string fieldName)
+        {
+            FieldInfo field = null;
+            if(fieldName != String.Empty)
+                field = Type.GetType("Vocaluxe.Lib.Song.CSong").GetField(fieldName);
+            List<SongPointer> _SortList = new List<SongPointer>();
+            foreach (CSong song in _Songs)
+            {
+                object value = field != null ? field.GetValue(song) : String.Empty;
+                if (value is List<String>)
+                {
+                    List<String> values = (List<String>)value;
+                    if (values.Count == 0)
+                    {
+                        _SortList.Add(new SongPointer(song.ID, String.Empty));
+                    }
+                    else
+                    {
+                        foreach (String sortString in (List<String>)value)
+                        {
+                            _SortList.Add(new SongPointer(song.ID, sortString));
+                        }
+                    }
+                }
+                else if (value is String)
+                {
+                    _SortList.Add(new SongPointer(song.ID, (String)value));
+                }
+                else
+                {
+                    throw new Exception("unkown sort field type");
+                }
+            }
+            return _SortList;
+        }
+        private static int _SortByFieldArtistTitle(SongPointer s1, SongPointer s2)
+        {
+            int res = s1.SortString.ToUpper().CompareTo(s2.SortString.ToUpper());
+            if (res == 0)
+            {
+                res = _Songs[s1.SongID].Artist.ToUpper().CompareTo(_Songs[s2.SongID].Artist.ToUpper());
+                if (res == 0)
+                {
+                    return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
+                }
+                return res;
+            }
+            return res;
+        }
+        private static int _SortByFieldTitle(SongPointer s1, SongPointer s2)
+        {
+            int res = s1.SortString.ToUpper().CompareTo(s2.SortString.ToUpper());
+            if (res == 0)
+            {
+                return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
+            }
+            return res;
+        }
+        private static void _CreateCategories(String NoCategoryTranslation)
+        {
+            string category = String.Empty;
+            _Categories.Clear();
+            for (int i = 0; i < _SongsSortList.Length; i++)
+            {
+                if (_SongsSortList[i].SortString.Length > 0)
+                {
+                    if (_SongsSortList[i].SortString.ToUpper() != category.ToUpper())
+                    {
+                        category = _SongsSortList[i].SortString;
+                        _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
+                    }
+                    _SongsSortList[i].CatIndex = _Categories.Count - 1;
+                }
+                else
+                {
+                    if (NoCategoryTranslation != category)
+                    {
+                        category = NoCategoryTranslation;
+                        _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
+                    }
+                    _SongsSortList[i].CatIndex = _Categories.Count - 1;
+                }
+            }
+        }
+        private static void _CreateCategoriesYear(String NoCategoryTranslation)
+        {
+            string category = String.Empty;
+            _Categories.Clear();
+            for (int i = 0; i < _SongsSortList.Length; i++)
+            {
+                if (_SongsSortList[i].SortString.Length > 0 && !_SongsSortList[i].SortString.Equals("0000"))
+                {
+                    if (_SongsSortList[i].SortString.ToUpper() != category.ToUpper())
+                    {
+                        category = _SongsSortList[i].SortString;
+                        _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
+                    }
+                    _SongsSortList[i].CatIndex = _Categories.Count - 1;
+                }
+                else
+                {
+                    if (NoCategoryTranslation != category)
+                    {
+                        category = NoCategoryTranslation;
+                        _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
+                    }
+                    _SongsSortList[i].CatIndex = _Categories.Count - 1;
+                }
+            }
+        }
+        private static void _CreateCategoriesLetter()
+        {
+            string category = String.Empty;
+            _Categories.Clear();
+            int NotLetterCat = -1;
+            for (int i = 0; i < _SongsSortList.Length; i++)
+            {
+                Char firstLetter = Char.ToUpper(_SongsSortList[i].SortString[0]);
+
+                if (!Char.IsLetter(firstLetter))
+                {
+                    firstLetter = '#';
+                }
+                if (firstLetter.ToString() != category)
+                {
+                    if (firstLetter != '#' || NotLetterCat == -1)
+                    {
+                        category = firstLetter.ToString();
+                        _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
+
+                        _SongsSortList[i].CatIndex = _Categories.Count - 1;
+
+                        if (firstLetter == '#')
+                            NotLetterCat = _SongsSortList[i].CatIndex;
+                    }
+                    else
+                        _SongsSortList[i].CatIndex = NotLetterCat;
+                }
+                else
+                    _SongsSortList[i].CatIndex = _Categories.Count - 1;
+            }
+        }
+        private static void _CreateCategoriesDecade()
+        {
+            string category = String.Empty;
+            _Categories.Clear();
+            for (int i = 0; i < _SongsSortList.Length; i++)
+            {
+                if (_SongsSortList[i].SortString.Length > 0 && !_SongsSortList[i].SortString.Equals("0000"))
+                {
+                    String decade = _SongsSortList[i].SortString.Substring(0, 3) + "0 - " + _SongsSortList[i].SortString.Substring(0, 3) + "9";
+                    if (decade != category)
+                    {
+                        category = decade;
+                        _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
+                    }
+                    _SongsSortList[i].CatIndex = _Categories.Count - 1;
+                }
+                else
+                {
+                    if (CLanguage.Translate("TR_SCREENSONG_NOYEAR") != category)
+                    {
+                        category = CLanguage.Translate("TR_SCREENSONG_NOYEAR");
+                        _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
+                    }
+                    _SongsSortList[i].CatIndex = _Categories.Count - 1;
+                }
+            }
+        }
+
         private static void _Sort(ESongSorting sorting, EOffOn Tabs, string SearchString)
         {
             if (_Songs.Count == 0)
@@ -320,456 +490,102 @@ namespace Vocaluxe.Base
 
             foreach (CSong song in _Songs)
             {
-                if (SearchString == String.Empty)
-                    _SongList.Add(song);
-                else
+                if (SearchString == String.Empty || song.Title.ToUpper().Contains(SearchString.ToUpper()) || song.Artist.ToUpper().Contains(SearchString.ToUpper()))
                 {
-                    if (song.Title.ToUpper().Contains(SearchString.ToUpper()) || song.Artist.ToUpper().Contains(SearchString.ToUpper()))
-                        _SongList.Add(song);
+                    _SongList.Add(song);
                 }
             }
 
+            String fieldName = String.Empty;
             switch (sorting)
             {
                 case ESongSorting.TR_CONFIG_EDITION:
-                    foreach (CSong song in _SongList)
-                    {
-                        if (song.Edition.Count == 0)
-                            _SortList.Add(new SongPointer(song.ID, String.Empty));
-                        else
-                        {
-                            for (int i = 0; i < song.Edition.Count; i++)
-                            {
-                                _SortList.Add(new SongPointer(song.ID, song.Edition[i]));
-                            }
-                        }
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2) 
-                    {
-                        int res = s1.SortString.ToUpper().CompareTo(s2.SortString.ToUpper());
-                        if (res == 0)
-                        {
-                            res = _Songs[s1.SongID].Artist.ToUpper().CompareTo(_Songs[s2.SongID].Artist.ToUpper());
-                            if (res == 0)
-                            {
-                                return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
-                            }
-                            return res;
-                        }
-                        return res; 
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-                    for (int i = 0; i < _SongsSortList.Length; i++ )
-                    {
-                        if (_SongsSortList[i].SortString.Length > 0)
-                        {
-                            if (_SongsSortList[i].SortString != category)
-                            {
-                                category = _SongsSortList[i].SortString;
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                        else
-                        {
-                            if (CLanguage.Translate("TR_SCREENSONG_NOEDITION") != category)
-                            {
-                                category = CLanguage.Translate("TR_SCREENSONG_NOEDITION");
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                    }
+                    fieldName = "Edition";
                     break;
-
                 case ESongSorting.TR_CONFIG_GENRE:
-                    foreach (CSong song in _SongList)
-                    {
-                        if (song.Genre.Count == 0)
-                            _SortList.Add(new SongPointer(song.ID, String.Empty));
-                        else
-                        {
-                            for (int i = 0; i < song.Genre.Count; i++)
-                            {
-                                _SortList.Add(new SongPointer(song.ID, song.Genre[i]));
-                            }
-                        }
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2)
-                    {
-                        int res = s1.SortString.ToUpper().CompareTo(s2.SortString.ToUpper());
-                        if (res == 0)
-                        {
-                            res = _Songs[s1.SongID].Artist.ToUpper().CompareTo(_Songs[s2.SongID].Artist.ToUpper());
-                            if (res == 0)
-                            {
-                                return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
-                            }
-                            return res;
-                        }
-                        return res;
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-                    for (int i = 0; i < _SongsSortList.Length; i++)
-                    {
-                        if (_SongsSortList[i].SortString.Length > 0)
-                        {
-
-                            if (_SongsSortList[i].SortString != category)
-                            {
-                                category = _SongsSortList[i].SortString;
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                        else
-                        {
-                            if (CLanguage.Translate("TR_SCREENSONG_NOGENRE") != category)
-                            {
-                                category = CLanguage.Translate("TR_SCREENSONG_NOGENRE");
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                    }
+                    fieldName = "Genre";
                     break;
-
                 case ESongSorting.TR_CONFIG_NONE:
-                    foreach (CSong song in _SongList)
-                    { 
-                        _SortList.Add(new SongPointer(song.ID, String.Empty));  
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2)
-                    {
-                        int res = s1.SortString.ToUpper().CompareTo(s2.SortString.ToUpper());
-                        if (res == 0)
-                        {
-                            return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
-                        }
-                        return res;
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-                    for (int i = 0; i < _SongsSortList.Length; i++)
-                    {
-                        _SongsSortList[i].CatIndex = 0;
-                    }
-                    category = CLanguage.Translate("TR_SCREENSONG_ALLSONGS");
-                    _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
+                    fieldName = String.Empty;
                     break;
-
                 case ESongSorting.TR_CONFIG_FOLDER:
-                    foreach (CSong song in _SongList)
-                    {
-                        _SortList.Add(new SongPointer(song.ID, song.FolderName));
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2) 
-                    {
-                        int res = s1.SortString.ToUpper().CompareTo(s2.SortString.ToUpper());
-                        if (res == 0)
-                        {
-                            res = _Songs[s1.SongID].Artist.ToUpper().CompareTo(_Songs[s2.SongID].Artist.ToUpper());
-                            if (res == 0)
-                            {
-                                return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
-                            }
-                            return res;
-                        }
-                        return res; 
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-                    for (int i = 0; i < _SongsSortList.Length; i++)
-                    {
-                        if (_SongsSortList[i].SortString != category)
-                        {
-                            category = _SongsSortList[i].SortString;
-                            _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                        }
-                        _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                    }
+                    fieldName = "FolderName";
                     break;
-
-                case ESongSorting.TR_CONFIG_ARTIST:
-                    foreach (CSong song in _SongList)
-                    {
-                        _SortList.Add(new SongPointer(song.ID, song.Artist));
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2)
-                    {                      
-                        int res = s1.SortString.ToUpper().CompareTo(s2.SortString.ToUpper());
-                        if (res == 0)
-                        {
-                            return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
-                        }
-                        return res;
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-                    for (int i = 0; i < _SongsSortList.Length; i++)
-                    {
-                        if (_SongsSortList[i].SortString != category)
-                        {
-                            category = _SongsSortList[i].SortString;
-                            _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                        }
-                        _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                    }
-                    break;
-
                 case ESongSorting.TR_CONFIG_ARTIST_LETTER:
-                    foreach (CSong song in _SongList)
-                    {
-                        _SortList.Add(new SongPointer(song.ID, song.Artist));
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2)
-                    {
-                        int res = s1.SortString.ToUpper().CompareTo(s2.SortString.ToUpper());
-                        if (res == 0)
-                        {
-                            return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
-                        }
-                        return res;
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-
-                    int NotLetterCat = -1;
-                    for (int i=0; i < _SongsSortList.Length; i++)
-                    {
-                        Char firstLetter = Char.ToUpper(_SongsSortList[i].SortString[0]);
-                        
-                        if (!Char.IsLetter(firstLetter))
-                        {
-                            firstLetter = '#';
-                        }
-                        if (firstLetter.ToString() != category)
-                        {
-                            if (firstLetter != '#' || NotLetterCat == -1)
-                            {
-                                category = firstLetter.ToString();
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-
-                                _SongsSortList[i].CatIndex = _Categories.Count - 1;
-
-                                if (firstLetter == '#')
-                                    NotLetterCat = _SongsSortList[i].CatIndex;
-                            }
-                            else
-                                _SongsSortList[i].CatIndex = NotLetterCat;
-                        }
-                        else
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                    }
+                case ESongSorting.TR_CONFIG_ARTIST:
+                    fieldName = "Artist";
                     break;
-
                 case ESongSorting.TR_CONFIG_TITLE_LETTER:
-                    foreach (CSong song in _SongList)
-                    {
-                        _SortList.Add(new SongPointer(song.ID, song.Title));
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2)
-                    {
-                        int res = s1.SortString.ToUpper().CompareTo(s2.SortString.ToUpper());
-                        if (res == 0)
-                        {
-                            return _Songs[s1.SongID].Artist.ToUpper().CompareTo(_Songs[s2.SongID].Artist.ToUpper());
-                        }
-                        return res;
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-
-                    NotLetterCat = -1;
-                    for (int i=0; i < _SongsSortList.Length; i++)
-                    {
-                        Char firstLetter = Char.ToUpper(_SongsSortList[i].SortString[0]);
-                        
-                        if (!Char.IsLetter(firstLetter))
-                        {
-                            firstLetter = '#';
-                        }
-                        if (firstLetter.ToString() != category)
-                        {
-                            if (firstLetter != '#' || NotLetterCat == -1)
-                            {
-                                category = firstLetter.ToString();
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-
-                                _SongsSortList[i].CatIndex = _Categories.Count - 1;
-
-                                if (firstLetter == '#')
-                                    NotLetterCat = _SongsSortList[i].CatIndex;
-                            }
-                            else
-                                _SongsSortList[i].CatIndex = NotLetterCat;
-                        }
-                        else
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                    }
+                    fieldName = "Title";
                     break;
-
-                case ESongSorting.TR_CONFIG_DECADE:
-                    foreach (CSong song in _SongList)
-                    {
-                        _SortList.Add(new SongPointer(song.ID, song.Year));
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2)
-                    {
-                        int res = s1.SortString.CompareTo(s2.SortString);
-                        if (res == 0)
-                        {
-                            res = _Songs[s1.SongID].Artist.ToUpper().CompareTo(_Songs[s2.SongID].Artist.ToUpper());
-                            if (res == 0)
-                            {
-                                return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
-                            }
-                            return res;
-                        }
-                        return res;
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-                    for (int i=0; i < _SongsSortList.Length; i++)
-                    {
-                        if (_SongsSortList[i].SortString.Length > 0 && !_SongsSortList[i].SortString.Equals("0000"))
-                        {
-                            String decade = _SongsSortList[i].SortString.Substring(0, 3) + "0 - " + _SongsSortList[i].SortString.Substring(0, 3) + "9";
-                            if (decade != category)
-                            {
-                                category = decade;
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                        else
-                        {
-                            if (CLanguage.Translate("TR_SCREENSONG_NOYEAR") != category)
-                            {
-                                category = CLanguage.Translate("TR_SCREENSONG_NOYEAR");
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                    }
-                    break;
-
                 case ESongSorting.TR_CONFIG_YEAR:
-                    foreach (CSong song in _SongList)
-                    {
-                        _SortList.Add(new SongPointer(song.ID, song.Year));
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2)
-                    {
-                        int res = s1.SortString.CompareTo(s2.SortString);
-                        if (res == 0)
-                        {
-                            res = _Songs[s1.SongID].Artist.ToUpper().CompareTo(_Songs[s2.SongID].Artist.ToUpper());
-                            if (res == 0)
-                            {
-                                return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
-                            }
-                            return res;
-                        }
-                        return res;
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-                    for (int i=0; i < _SongsSortList.Length; i++)
-                    {
-                        if (_SongsSortList[i].SortString.Length > 0 && !_SongsSortList[i].SortString.Equals("0000"))
-                        {
-                            if (_SongsSortList[i].SortString != category)
-                            {
-                                category = _SongsSortList[i].SortString;
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                        else
-                        {
-                            if (CLanguage.Translate("TR_SCREENSONG_NOYEAR") != category)
-                            {
-                                category = CLanguage.Translate("TR_SCREENSONG_NOYEAR");
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                    }
+                case ESongSorting.TR_CONFIG_DECADE:
+                    fieldName = "Year";
                     break;
-
                 case ESongSorting.TR_CONFIG_LANGUAGE:
-                    foreach (CSong song in _SongList)
-                    {
-                        if (song.Language.Count == 0)
-                            _SortList.Add(new SongPointer(song.ID, String.Empty));
-                        else
-                        {
-                            for (int i = 0; i < song.Language.Count; i++)
-                            {
-                                _SortList.Add(new SongPointer(song.ID, song.Language[i]));
-                            }
-                        }
-                    }
-
-                    _SortList.Sort(delegate(SongPointer s1, SongPointer s2)
-                    {
-                        int res = s1.SortString.CompareTo(s2.SortString);
-                        if (res == 0)
-                        {
-                            res = _Songs[s1.SongID].Artist.ToUpper().CompareTo(_Songs[s2.SongID].Artist.ToUpper());
-                            if (res == 0)
-                            {
-                                return _Songs[s1.SongID].Title.ToUpper().CompareTo(_Songs[s2.SongID].Title.ToUpper());
-                            }
-                            return res;
-                        }
-                        return res;
-                    });
-
-                    _SongsSortList = _SortList.ToArray();
-                    _Categories.Clear();
-                    for (int i=0; i < _SongsSortList.Length; i++)
-                    {
-                        if (_SongsSortList[i].SortString.Length > 0)
-                        {
-                            if (_SongsSortList[i].SortString != category)
-                            {
-                                category = _SongsSortList[i].SortString;
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                        else
-                        {
-                            if (CLanguage.Translate("TR_SCREENSONG_NOLANGUAGE") != category)
-                            {
-                                category = CLanguage.Translate("TR_SCREENSONG_NOLANGUAGE");
-                                _Categories.Add(new CCategory(category, new STexture(-1), new STexture(-1)));
-                            }
-                            _SongsSortList[i].CatIndex = _Categories.Count - 1;
-                        }
-                    }
+                    fieldName = "Language";
+                    break;
+                default:
+                    break;
+            }
+            _SortList = _CreateSortList(fieldName);
+            if(sorting == ESongSorting.TR_CONFIG_NONE) 
+            {
+                _SortList.Sort(_SortByFieldTitle);
+            }
+            else 
+            {
+                _SortList.Sort(_SortByFieldArtistTitle);
+            }
+            _SongsSortList = _SortList.ToArray();
+            string noCategory = string.Empty;
+            switch (sorting)
+            {
+                case ESongSorting.TR_CONFIG_EDITION:
+                    noCategory = CLanguage.Translate("TR_SCREENSONG_NOEDITION");
+                    break;
+                case ESongSorting.TR_CONFIG_GENRE:
+                    noCategory = CLanguage.Translate("TR_SCREENSONG_NOGENRE");
+                    break;
+                case ESongSorting.TR_CONFIG_NONE:
+                    noCategory = CLanguage.Translate("TR_SCREENSONG_ALLSONGS");
+                    break;
+                case ESongSorting.TR_CONFIG_ARTIST:
+                case ESongSorting.TR_CONFIG_FOLDER:
+                    noCategory = String.Empty;
+                    break;
+                case ESongSorting.TR_CONFIG_ARTIST_LETTER:
+                case ESongSorting.TR_CONFIG_TITLE_LETTER:
+                case ESongSorting.TR_CONFIG_DECADE:
+                    break;
+                case ESongSorting.TR_CONFIG_YEAR:
+                    noCategory = CLanguage.Translate("TR_SCREENSONG_NOYEAR");
+                    break;
+                case ESongSorting.TR_CONFIG_LANGUAGE:
+                    noCategory = CLanguage.Translate("TR_SCREENSONG_NOLANGUAGE");
+                    break;
+                default:
+                    break;
+            }
+            switch (sorting)
+            {
+                case ESongSorting.TR_CONFIG_EDITION:
+                case ESongSorting.TR_CONFIG_GENRE:
+                case ESongSorting.TR_CONFIG_NONE:
+                case ESongSorting.TR_CONFIG_ARTIST:
+                case ESongSorting.TR_CONFIG_FOLDER:
+                case ESongSorting.TR_CONFIG_LANGUAGE:
+                    _CreateCategories(noCategory);
+                    break;
+                case ESongSorting.TR_CONFIG_YEAR:
+                    _CreateCategoriesYear(noCategory);
+                    break;
+                case ESongSorting.TR_CONFIG_ARTIST_LETTER:
+                case ESongSorting.TR_CONFIG_TITLE_LETTER:
+                    _CreateCategoriesLetter();
+                    break;
+                case ESongSorting.TR_CONFIG_DECADE:
+                    _CreateCategoriesDecade();
                     break;
                 default:
                     break;
@@ -792,7 +608,6 @@ namespace Vocaluxe.Base
                 cat.CoverTextureSmall = cover;
             }
         }
-
         public static void LoadSongs()
         {
             CLog.StartBenchmark(1, "Load Songs");
